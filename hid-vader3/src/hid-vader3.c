@@ -25,6 +25,22 @@ MODULE_VERSION(VADER3_VERSION);
 #define VENDOR_FLYDIGI 0xD7D7
 #define DEV_VADER3 0x0041
 
+// xbox elite 2 paddles
+#define BTN_PADDLES(b) (BTN_TRIGGER_HAPPY5+(b))
+
+// vader 3 specific buttons
+#define BTN_CIRCLE KEY_CAMERA
+#define BTN_HOME 0x18E
+#define BTN_FACE_C 0x100
+#define BTN_FACE_Z 0x1C
+#define BTN_BACK_LEFTMOST 0x192
+#define BTN_BACK_MIDDLE_LEFT 0x179
+#define BTN_BACK_MIDDLE_RIGHT 0x193
+#define BTN_BACK_RIGHTMOST 0x16A
+
+int l4_cache = 0;
+int r4_cache = 0;
+
 static int vader3_input_mapping(struct hid_device *dev,
                                 struct hid_input *input,
                                 struct hid_field *field,
@@ -63,14 +79,18 @@ static int vader3_input_configured(struct hid_device *dev,
     set_bit(EV_KEY, input_dev->evbit);
     set_bit(EV_ABS, input_dev->evbit);
 
-    // If we want to initialize buttons under the first 16, we can, but it
-    // would violate the Xbox spec, and xpadneo devs recommend we stick to trigger happy range.
-    // set_bit(BTN_C, input_dev->keybit);
-
-    // So, we'll just initialize the trigger happy range
-    for (i = 0; i < max_btn; i++) {
-        set_bit(BTN_TRIGGER_HAPPY1 + i, input_dev->keybit);
-    }
+    // define xbox buttons
+    set_bit(BTN_A, input_dev->keybit);
+    set_bit(BTN_B, input_dev->keybit);
+    set_bit(BTN_X, input_dev->keybit);
+    set_bit(BTN_Y, input_dev->keybit);
+    set_bit(BTN_TL, input_dev->keybit);
+    set_bit(BTN_TR, input_dev->keybit);
+    set_bit(BTN_SELECT, input_dev->keybit);
+    set_bit(BTN_START, input_dev->keybit);
+    set_bit(BTN_THUMBL, input_dev->keybit);
+    set_bit(BTN_THUMBR, input_dev->keybit);
+    set_bit(BTN_MODE, input_dev->keybit);
 
     // Define stick capabilities
     set_bit(ABS_X, input_dev->absbit);
@@ -88,9 +108,16 @@ static int vader3_input_configured(struct hid_device *dev,
     input_set_abs_params(input_dev, ABS_Z, abs_min, abs_max, 32, deadzone);
     input_set_abs_params(input_dev, ABS_RZ, abs_min, abs_max, 32, deadzone);
 
-    // d-pad
-    /* input_set_abs_params(input_dev, ABS_HAT0Y, -1, 1, 32, 0); */
-    /* input_set_abs_params(input_dev, ABS_HAT0X, -1, 1, 32, 0); */
+    // set paddles
+    for (int x=0; x < 4; x++) {
+      set_bit(BTN_PADDLES(x), input_dev->keybit);
+    }
+
+    // initialize the entire BTN_TRIGGER_HAPPY range, even though we are explicitly mapping xbox keys above.
+    // without this, steam doesn't allow back paddle remap
+    for (i = 0; i < max_btn; i++) {
+        set_bit(BTN_TRIGGER_HAPPY1 + i, input_dev->keybit);
+    }
 
     return 0;
 }
@@ -254,44 +281,118 @@ static int vader3_event(struct hid_device *dev, struct hid_field *field,
 
   if (usage->type == EV_KEY)
     {
-      // Special remapping to make it work correctly and not show weird events out of joy range
+      // elite paddle mappings
+      // middle right -> R4 -> BTN_TRIGGER_HAPPY5
+      // rightmost -> R5 -> BTN_TRIGGER_HAPPY6
+      // middle left -> L4 -> BTN_TRIGGER_HAPPY7
+      // leftmost -> L5 -> BTN_TRIGGER_HAPPY8
+
+      /**
+       * Everytime any button is pressed, there are events fired for every button on the controller with its current value.
+       * Since I would like to map C/Z to the same button as L4/R4 (middle back buttons) we need to cache their value and OR
+       * it with the value of the respective back paddles
+       * 
+       * If we don't cache the value, then it will always assume the value of the back paddles, since their usage->code is higher they are 
+       * always processed after.
+      */
+      if (usage->code == BTN_FACE_C) {
+        l4_cache = value;
+      }
+
+      if (usage->code == BTN_FACE_Z) {
+        r4_cache = value;
+      }
+
+      int res;
+
       switch (usage->code)
         {
-        case BTN_0: // C-Button
-          input_report_key(input_dev, BTN_TRIGGER_HAPPY1, value);
-          // input_report_key(input_dev, BTN_C, value);
-          break;
-        case KEY_ENTER: // Z-Button
-          input_report_key(input_dev, BTN_TRIGGER_HAPPY2, value);
-          break;
-        case KEY_CHANNELUP: // Leftmost back button
-          input_report_key(input_dev, BTN_TRIGGER_HAPPY3, value);
-          break;
-        case KEY_TV: // Second leftmost back button
-          input_report_key(input_dev, BTN_TRIGGER_HAPPY4, value);
-          break;
-        case KEY_CHANNELDOWN: // Second rightmost back button
-          input_report_key(input_dev, BTN_TRIGGER_HAPPY5, value);
-          break;
-        case KEY_PROGRAM: // Rightmost back button
-        case KEY_EJECTCD: // Original without our raw re-map - that shows up in evtest but NOT qjoypad
-          input_report_key(input_dev, BTN_TRIGGER_HAPPY6, value);
-          break;
-        case KEY_CAMERA: // Circle button under joysticks
-          input_report_key(input_dev, BTN_TRIGGER_HAPPY7, value);
-          break;
-        case KEY_RED: // Home button under joysticks
-          input_report_key(input_dev, BTN_TRIGGER_HAPPY8, value);
-          break;
-        default: // Anything else, just pass through (why do their usage codes work?)
-          input_report_key(input_dev, usage->code, value);
-          break;
+          // normal XBOX controller inputs
+          case BTN_A:
+          case BTN_B:
+          case BTN_X:
+          case BTN_Y:
+          case BTN_TL:
+          case BTN_TR:
+          case BTN_START:
+          case BTN_SELECT:
+          case BTN_TL2:
+          case BTN_TR2:
+          case BTN_THUMBL:
+          case BTN_THUMBR:
+            input_report_key(input_dev, usage->code, value);
+            break;
+
+          // make the circle button the "xbox" button, steamdeck uses hold home for some functions
+          // and v3p will power down if you hold home
+          case BTN_CIRCLE: 
+            input_report_key(input_dev, BTN_MODE, value);
+            break;
+          
+          case BTN_HOME: // disable the home button... could remap to another function (espace key maybe?)
+            // input_report_key(input_dev, BTN_SHARE, value);
+            break;
+
+          case BTN_FACE_Z: // map Z to mirror middle right since it is hard to reach
+          case BTN_BACK_MIDDLE_RIGHT:
+            res = r4_cache | value;
+            input_report_key(input_dev, BTN_PADDLES(0), res);
+            break;
+          
+          case BTN_BACK_RIGHTMOST:
+            input_report_key(input_dev, BTN_PADDLES(1), value);
+            break;
+          
+          case BTN_FACE_C: // map C to mirror middle right since it is hard to reach
+          case BTN_BACK_MIDDLE_LEFT:
+            res = l4_cache | value;
+            input_report_key(input_dev, BTN_PADDLES(2), res);
+            break;
+
+          case BTN_BACK_LEFTMOST:
+            input_report_key(input_dev, BTN_PADDLES(3), value);
+            break;
+      
+          default:
+            // don't pass through other events
+            // input_report_key(input_dev, usage->code, value);
+            break;
         }
+
+      // clear the value in the cache after processing the back paddles, this will get reset again by C/Z above on next event
+      if (usage->code == BTN_BACK_MIDDLE_LEFT) {
+        l4_cache = 0;
+      }
+
+      if (usage->code == BTN_BACK_MIDDLE_RIGHT) {
+        r4_cache = 0;
+      }
 
       return 1;
     }
 
   return 0;
+}
+static int vader3_probe(struct hid_device *hdev, const struct hid_device_id *id)
+{ 
+  // mocking an xbox elite 2 controller
+	hdev->product = 0x0B05;
+  hdev->vendor = 0x045E;
+  hdev->version = 0x903;
+
+  int ret = hid_parse(hdev);
+	if (ret) {
+		hid_err(hdev, "parse failed\n");
+		return ret;
+	}
+
+	ret = hid_hw_start(hdev, HID_CONNECT_DEFAULT);
+	if (ret) {
+		hid_err(hdev, "hw start failed\n");
+		return ret;
+	}
+
+	return 0;
 }
 
 static const struct hid_device_id vader3_devices[] = {
@@ -308,6 +409,7 @@ static struct hid_driver vader3_driver = {
   .input_configured = vader3_input_configured,
   .raw_event = vader3_raw_event,
   .event = vader3_event,
+  .probe = vader3_probe,
 };
 
 // module_hid_driver(vader3_driver);
