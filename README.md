@@ -4,6 +4,13 @@ Adds support for the 4 back buttons/paddles, C/Z buttons, and
 circle/home buttons, while connected in D-Input mode under a
 Bluetooth connection.
 
+## SDL Note
+To prevent SDL from reading directly the HIDRAW and bypassing this module you need to add this environment variable to `/etc/environment`
+
+```
+SDL_JOYSTICK_HIDAPI=0
+```
+
 # Installation (you have to compile it)
 
 ```
