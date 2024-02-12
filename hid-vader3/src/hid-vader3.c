@@ -38,8 +38,8 @@ MODULE_VERSION(VADER3_VERSION);
 #define BTN_BACK_MIDDLE_RIGHT 0x193
 #define BTN_BACK_RIGHTMOST 0x16A
 
-int l4_cache = 0;
-int r4_cache = 0;
+int l5_cache = 0;
+int r5_cache = 0;
 
 static int vader3_input_mapping(struct hid_device *dev,
                                 struct hid_input *input,
@@ -203,7 +203,7 @@ static int vader3_event(struct hid_device *dev, struct hid_field *field,
 {
   struct input_dev *input_dev = hid_get_drvdata(dev);
 
-  // hid_info(input_dev, "type: %d\n", usage->type);
+
 
   // d-pad is all messed up
   // up/down:
@@ -282,25 +282,25 @@ static int vader3_event(struct hid_device *dev, struct hid_field *field,
   if (usage->type == EV_KEY)
     {
       // elite paddle mappings
-      // middle right -> R4 -> BTN_TRIGGER_HAPPY5
-      // rightmost -> R5 -> BTN_TRIGGER_HAPPY6
-      // middle left -> L4 -> BTN_TRIGGER_HAPPY7
-      // leftmost -> L5 -> BTN_TRIGGER_HAPPY8
+      // rightmost -> R4 -> BTN_TRIGGER_HAPPY5
+      // middle right -> R5 -> BTN_TRIGGER_HAPPY6
+      // leftmost -> L4 -> BTN_TRIGGER_HAPPY7
+      // middle left -> L5 -> BTN_TRIGGER_HAPPY8
 
       /**
        * Everytime any button is pressed, there are events fired for every button on the controller with its current value.
        * Since I would like to map C/Z to the same button as L4/R4 (middle back buttons) we need to cache their value and OR
        * it with the value of the respective back paddles
-       * 
-       * If we don't cache the value, then it will always assume the value of the back paddles, since their usage->code is higher they are 
+       *
+       * If we don't cache the value, then it will always assume the value of the back paddles, since their usage->code is higher they are
        * always processed after.
       */
       if (usage->code == BTN_FACE_C) {
-        l4_cache = value;
+        l5_cache = value;
       }
 
       if (usage->code == BTN_FACE_Z) {
-        r4_cache = value;
+        r5_cache = value;
       }
 
       int res;
@@ -325,34 +325,34 @@ static int vader3_event(struct hid_device *dev, struct hid_field *field,
 
           // make the circle button the "xbox" button, steamdeck uses hold home for some functions
           // and v3p will power down if you hold home
-          case BTN_CIRCLE: 
+          case BTN_CIRCLE:
             input_report_key(input_dev, BTN_MODE, value);
             break;
-          
+
           case BTN_HOME: // disable the home button... could remap to another function (espace key maybe?)
             // input_report_key(input_dev, BTN_SHARE, value);
             break;
 
+          case BTN_BACK_RIGHTMOST:
+            input_report_key(input_dev, BTN_PADDLES(0), value);
+            break;
+
           case BTN_FACE_Z: // map Z to mirror middle right since it is hard to reach
           case BTN_BACK_MIDDLE_RIGHT:
-            res = r4_cache | value;
-            input_report_key(input_dev, BTN_PADDLES(0), res);
-            break;
-          
-          case BTN_BACK_RIGHTMOST:
-            input_report_key(input_dev, BTN_PADDLES(1), value);
-            break;
-          
-          case BTN_FACE_C: // map C to mirror middle right since it is hard to reach
-          case BTN_BACK_MIDDLE_LEFT:
-            res = l4_cache | value;
-            input_report_key(input_dev, BTN_PADDLES(2), res);
+            res = r5_cache | value;
+            input_report_key(input_dev, BTN_PADDLES(1), res);
             break;
 
           case BTN_BACK_LEFTMOST:
-            input_report_key(input_dev, BTN_PADDLES(3), value);
+            input_report_key(input_dev, BTN_PADDLES(2), value);
             break;
-      
+
+          case BTN_FACE_C: // map C to mirror middle right since it is hard to reach
+          case BTN_BACK_MIDDLE_LEFT:
+            res = l5_cache | value;
+            input_report_key(input_dev, BTN_PADDLES(3), res);
+            break;
+
           default:
             // don't pass through other events
             // input_report_key(input_dev, usage->code, value);
@@ -361,11 +361,11 @@ static int vader3_event(struct hid_device *dev, struct hid_field *field,
 
       // clear the value in the cache after processing the back paddles, this will get reset again by C/Z above on next event
       if (usage->code == BTN_BACK_MIDDLE_LEFT) {
-        l4_cache = 0;
+        l5_cache = 0;
       }
 
       if (usage->code == BTN_BACK_MIDDLE_RIGHT) {
-        r4_cache = 0;
+        r5_cache = 0;
       }
 
       return 1;
@@ -374,9 +374,9 @@ static int vader3_event(struct hid_device *dev, struct hid_field *field,
   return 0;
 }
 static int vader3_probe(struct hid_device *hdev, const struct hid_device_id *id)
-{ 
+{
   // mocking an xbox elite 2 controller
-	hdev->product = 0x0B05;
+  hdev->product = 0x0B05;
   hdev->vendor = 0x045E;
   hdev->version = 0x903;
 
