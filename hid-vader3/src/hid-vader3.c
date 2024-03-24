@@ -395,6 +395,14 @@ static int vader3_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	return 0;
 }
 
+static void vader3_remove(struct hid_device *hdev)
+{
+	hid_hw_close(hdev);
+    hdev->product = DEV_VADER3;
+    hdev->vendor = VENDOR_FLYDIGI;
+	hid_hw_stop(hdev);
+}
+
 static const struct hid_device_id vader3_devices[] = {
   { HID_BLUETOOTH_DEVICE(VENDOR_FLYDIGI, DEV_VADER3) },
   {}
@@ -410,6 +418,7 @@ static struct hid_driver vader3_driver = {
   .raw_event = vader3_raw_event,
   .event = vader3_event,
   .probe = vader3_probe,
+  .remove = vader3_remove,
 };
 
 // module_hid_driver(vader3_driver);
@@ -425,8 +434,8 @@ static int __init vader3_init(void)
 
 static void __exit vader3_exit(void)
 {
- 	dbg_hid("vader3:%s\n", __func__);
-	hid_unregister_driver(&vader3_driver);
+  dbg_hid("vader3:%s\n", __func__);
+  hid_unregister_driver(&vader3_driver);
 }
 
 module_init(vader3_init);
